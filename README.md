@@ -69,3 +69,9 @@ Safari 打开 GitHub Pages 地址 → 分享 → 添加到主屏幕。
 - 更新 App 图标：180 / 192 / 512 / 1024 px。
 - iPhone 添加到主屏幕使用独立 180×180 Apple Touch Icon。
 - Service Worker 缓存升级到 v5。
+
+## v6 更新
+- App 图标改为用户提供的冰箱插画。
+- 已更新 180 / 192 / 512 / 1024 px 图标资源。
+- “用完”按钮新增确认弹窗，避免误删库存。
+- Service Worker 缓存升级到 v6。

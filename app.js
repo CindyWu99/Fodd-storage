@@ -378,8 +378,13 @@ function saveItem(){
 }
 
 function consumeItem(id){
-  const i=state.items.find(x=>x.id===id); if(!i)return;
-  state.items=state.items.filter(x=>x.id!==id); saveLocal(); toast(`已将「${i.name}」标记为用完`);
+  const i=state.items.find(x=>x.id===id);
+  if(!i) return;
+  const ok = window.confirm(`确定将「${i.name}」标记为用完，并从库存中删除吗？`);
+  if(!ok) return;
+  state.items=state.items.filter(x=>x.id!==id);
+  saveLocal();
+  toast(`已将「${i.name}」标记为用完`);
 }
 
 function deleteCurrent(){
