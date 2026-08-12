@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#fbfaf7" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="食物库存" />
+  <title>食物库存</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/icon-180.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand-block">
+        <div class="brand-icon" aria-hidden="true">▦</div>
+        <div>
+          <div class="eyebrow">HOME PANTRY</div>
+          <h1>食物库存</h1>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button id="installBtn" class="ghost-btn hidden" type="button">安装 App</button>
+        <button id="syncBtn" class="ghost-btn" type="button">数据同步</button>
+        <button id="addBtnDesktop" class="primary-btn desktop-only" type="button">＋ 添加食物</button>
+      </div>
+    </header>
+
+    <nav class="top-tabs" aria-label="主要功能">
+      <button class="top-tab active" data-view="storage" type="button">食物储存</button>
+      <button class="top-tab" data-view="ideas" type="button">吃什么</button>
+      <button class="top-tab" data-view="alerts" type="button">日期提示 <span id="alertBadge" class="tab-badge hidden">0</span></button>
+    </nav>
+
+    <main>
+      <section id="storageView" class="view active">
+        <div class="hero-grid">
+          <article class="summary-card">
+            <div class="summary-label">当前库存</div>
+            <div class="summary-main"><span id="totalCount">0</span><small> 件</small></div>
+            <div id="summaryHint" class="summary-hint">开始登记你的食物。</div>
+          </article>
+          <article class="metric-card">
+            <span>即将到期</span><strong id="soonCount">0</strong><small>7 天内</small>
+          </article>
+          <article class="metric-card">
+            <span>已过期</span><strong id="expiredCount">0</strong><small>建议尽快处理</small>
+          </article>
+        </div>
+
+        <div class="toolbar">
+          <label class="search-box">
+            <span aria-hidden="true">⌕</span>
+            <input id="searchInput" type="search" placeholder="搜索食物名称或备注" autocomplete="off" />
+          </label>
+          <button id="filterBtn" class="filter-btn" type="button">全部标签</button>
+        </div>
+
+        <div id="fridgeZoneTabs" class="zone-tabs">
+          <button class="zone-tab active" data-zone="chiller" type="button">冷藏</button>
+          <button class="zone-tab" data-zone="freezer" type="button">冷冻</button>
+        </div>
+
+        <div id="categoryChips" class="chips" aria-label="标签筛选"></div>
+
+        <div class="section-title-row">
+          <div>
+            <div id="storageTitle" class="section-kicker">冰箱 · 冷藏</div>
+            <h2 id="storageSubtitle">已登记食物</h2>
+          </div>
+          <button id="sortBtn" class="text-btn" type="button">按到期日排序</button>
+        </div>
+
+        <div id="foodList" class="food-grid"></div>
+        <div id="storageEmpty" class="empty-state hidden">
+          <div class="empty-symbol">○</div>
+          <h3>这里还没有食物</h3>
+          <p>添加后会自动保存到当前设备，也可以导出数据文件同步到其他设备。</p>
+          <button id="emptyAddBtn" class="primary-btn" type="button">添加第一件食物</button>
+        </div>
+      </section>
+
+      <section id="ideasView" class="view">
+        <div class="ideas-hero">
+          <div>
+            <div class="section-kicker">SMART COOKING</div>
+            <h2>今天吃什么？</h2>
+            <p>根据库存优先推荐“已经有大部分食材”的组合，减少临时采购和食物浪费。</p>
+          </div>
+          <button id="randomRecipeBtn" class="primary-btn" type="button">随机来一个</button>
+        </div>
+        <div class="idea-controls">
+          <label>偏好
+            <select id="recipeMode">
+              <option value="best">优先匹配现有食材</option>
+              <option value="quick">15–25 分钟快手</option>
+              <option value="random">完全随机</option>
+            </select>
+          </label>
+        </div>
+        <div id="recipeCard" class="recipe-card"></div>
+        <div class="subsection">
+          <div class="section-title-row">
+            <div>
+              <div class="section-kicker">RECOMMENDED</div>
+              <h2>适合当前库存</h2>
+            </div>
+          </div>
+          <div id="recipeList" class="recipe-grid"></div>
+        </div>
+      </section>
+
+      <section id="alertsView" class="view">
+        <div class="alert-header">
+          <div>
+            <div class="section-kicker">DATE ALERTS</div>
+            <h2>日期提示</h2>
+            <p>系统按“已过期 / 3 天内 / 7 天内”自动整理；未填写日期的食物不会误报。</p>
+          </div>
+        </div>
+        <div id="alertSummary" class="alert-summary"></div>
+        <div id="alertGroups" class="alert-groups"></div>
+      </section>
+    </main>
+
+    <nav class="bottom-tabs" aria-label="储存位置">
+      <button class="bottom-tab active" data-storage="fridge" type="button">
+        <span class="tab-icon">▥</span><span>冰箱</span>
+      </button>
+      <button class="bottom-tab" data-storage="snacks" type="button">
+        <span class="tab-icon">◇</span><span>零食柜</span>
+      </button>
+      <button class="bottom-tab" data-storage="cabinet" type="button">
+        <span class="tab-icon">▤</span><span>橱柜</span>
+      </button>
+    </nav>
+
+    <button id="fabAdd" class="fab" type="button" aria-label="添加食物">＋</button>
+  </div>
+
+  <dialog id="foodDialog" class="modal">
+    <form id="foodForm" method="dialog" class="modal-card">
+      <div class="modal-head">
+        <div>
+          <div class="section-kicker">FOOD ITEM</div>
+          <h2 id="foodDialogTitle">添加食物</h2>
+        </div>
+        <button id="closeFoodBtn" class="icon-btn" type="button" aria-label="关闭">×</button>
+      </div>
+
+      <input id="itemId" type="hidden" />
+      <div class="form-grid">
+        <label class="full">食物名称 *
+          <input id="foodName" type="text" maxlength="40" placeholder="例如：鸡腿肉、草莓、酸奶" required />
+        </label>
+
+        <label>储存位置
+          <select id="foodStorage">
+            <option value="fridge">冰箱</option>
+            <option value="snacks">零食柜</option>
+            <option value="cabinet">橱柜</option>
+          </select>
+        </label>
+
+        <label id="zoneField">冰箱区域
+          <select id="foodZone">
+            <option value="chiller">冷藏</option>
+            <option value="freezer">冷冻</option>
+          </select>
+        </label>
+
+        <fieldset class="full">
+          <legend>简单标签 *</legend>
+          <div id="categoryPicker" class="category-picker"></div>
+        </fieldset>
+
+        <label>数量
+          <input id="foodQty" type="number" min="0.1" step="0.1" value="1" />
+        </label>
+
+        <label>单位
+          <select id="foodUnit">
+            <option>份</option><option>个</option><option>包</option><option>盒</option>
+            <option>瓶</option><option>罐</option><option>袋</option><option>块</option><option>克</option>
+          </select>
+        </label>
+
+        <fieldset class="full">
+          <legend>开封状态</legend>
+          <div id="openStatePicker" class="state-picker" role="group" aria-label="开封状态">
+            <button type="button" class="state-option active" data-opened="false">未开封</button>
+            <button type="button" class="state-option" data-opened="true">已开封</button>
+          </div>
+        </fieldset>
+
+        <label class="full">到期日（选填）
+          <input id="foodExpiry" type="date" />
+        </label>
+
+        <label class="full">备注（选填）
+          <textarea id="foodNote" rows="3" maxlength="120" placeholder="例如：周末做咖喱、留给早餐"></textarea>
+        </label>
+      </div>
+
+      <div id="foodFormFeedback" class="form-feedback hidden" role="alert"></div>
+
+      <div class="modal-actions">
+        <button id="deleteItemBtn" class="danger-btn hidden" type="button">删除</button>
+        <span class="spacer"></span>
+        <button id="cancelFoodBtn" class="ghost-btn" type="button">取消</button>
+        <button id="saveItemBtn" class="primary-btn" type="button">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="syncDialog" class="modal wide">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div>
+          <div class="section-kicker">DATA SYNC</div>
+          <h2>数据同步与纯文本管理</h2>
+        </div>
+        <button id="closeSyncBtn" class="icon-btn" type="button" aria-label="关闭">×</button>
+      </div>
+
+      <div class="sync-note">
+        <strong>推荐方式：</strong>应用平时自动保存在浏览器中；需要跨设备时导出 <code>food-data.json</code>，
+        把它放进 iCloud Drive / Google Drive / GitHub 仓库，再在另一台设备导入。
+      </div>
+
+      <div class="sync-grid">
+        <section class="sync-panel">
+          <h3>文件同步</h3>
+          <p>适合手机与电脑。JSON 本质上是纯文本，可直接用文本编辑器修改。</p>
+          <div class="button-stack">
+            <button id="exportBtn" class="primary-btn" type="button">导出 food-data.json</button>
+            <label class="file-button">导入 food-data.json
+              <input id="importFile" type="file" accept=".json,.txt,application/json,text/plain" />
+            </label>
+            <button id="loadRepoBtn" class="ghost-btn" type="button">从本站 food-data.json 读取</button>
+          </div>
+          <p class="microcopy">提示：GitHub Pages 是静态网站，浏览器不能无授权自动改写仓库里的文件。因此“导出 → 替换仓库文件 → 其他设备读取”是最稳妥的无服务器方案。</p>
+        </section>
+
+        <section class="sync-panel">
+          <h3>直接编辑纯文本</h3>
+          <p>可以复制这段 JSON 到任何文本文件中；修改后点“应用文本数据”。</p>
+          <textarea id="dataTextarea" class="data-textarea" spellcheck="false"></textarea>
+          <div class="row-actions">
+            <button id="refreshTextBtn" class="ghost-btn" type="button">刷新文本</button>
+            <button id="copyTextBtn" class="ghost-btn" type="button">复制</button>
+            <button id="applyTextBtn" class="primary-btn" type="button">应用文本数据</button>
+          </div>
+        </section>
+      </div>
+
+      <div class="desktop-file-panel">
+        <div>
+          <h3>电脑端增强：绑定本地文件</h3>
+          <p>Chrome / Edge 支持直接选择一个 JSON 文件。绑定后可一键读写；Safari/iPhone 通常不支持此能力。</p>
+        </div>
+        <div class="row-actions">
+          <button id="bindFileBtn" class="ghost-btn" type="button">绑定文件</button>
+          <button id="readBoundBtn" class="ghost-btn" type="button" disabled>读取绑定文件</button>
+          <button id="writeBoundBtn" class="primary-btn" type="button" disabled>写入绑定文件</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "name": "食物库存 · 冰箱与橱柜管理",
+  "short_name": "食物库存",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#faf9f6",
+  "theme_color": "#fbfaf7",
+  "description": "管理冰箱、零食柜和橱柜库存，记录到期日并根据现有食材推荐吃什么。",
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
