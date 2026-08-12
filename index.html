@@ -89,19 +89,28 @@
           <div>
             <div class="section-kicker">SMART COOKING</div>
             <h2>今天吃什么？</h2>
-            <p>根据库存优先推荐“已经有大部分食材”的组合，减少临时采购和食物浪费。</p>
+            <p>按你实际登记的食材名称匹配常见菜式，只提供简单灵感，不显示复杂步骤。</p>
           </div>
           <button id="randomRecipeBtn" class="primary-btn" type="button">随机来一个</button>
         </div>
         <div class="idea-controls">
           <label>偏好
             <select id="recipeMode">
-              <option value="best">优先匹配现有食材</option>
-              <option value="quick">15–25 分钟快手</option>
-              <option value="random">完全随机</option>
+              <option value="best">库存最匹配</option>
+              <option value="quick">快手优先</option>
+              <option value="random">随机灵感</option>
             </select>
           </label>
         </div>
+
+        <div class="ingredient-browser">
+          <div class="ingredient-browser-head">
+            <span>按库存食材查看</span>
+            <small id="ingredientCoverageHint"></small>
+          </div>
+          <div id="ingredientFilterChips" class="ingredient-filter-chips"></div>
+        </div>
+
         <div id="recipeCard" class="recipe-card"></div>
         <div class="subsection">
           <div class="section-title-row">
@@ -274,6 +283,7 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <script src="./recipe-data.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

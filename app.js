@@ -9,25 +9,15 @@ const defaultData = {
   items: []
 };
 
-const recipes = [
-  {name:"鸡腿肉蔬菜饭", time:25, categories:["肉类","蔬菜","主食"], ingredients:["鸡腿肉","任意蔬菜","米饭"], steps:["鸡腿肉切块并煎熟","加入蔬菜翻炒","配米饭装盘"]},
-  {name:"番茄鸡蛋面", time:18, categories:["蔬菜","蛋奶","主食"], ingredients:["番茄","鸡蛋","面"], steps:["番茄炒出汁","加入鸡蛋","煮面后浇上汤汁"]},
-  {name:"三文鱼拌饭", time:20, categories:["海鲜","主食","蔬菜"], ingredients:["三文鱼","米饭","蔬菜"], steps:["三文鱼煎熟","蔬菜简单处理","和米饭一起装碗"]},
-  {name:"牛肉蔬菜炒饭", time:20, categories:["肉类","蔬菜","主食"], ingredients:["牛肉","蔬菜","米饭"], steps:["牛肉快炒盛出","炒蔬菜与米饭","牛肉回锅调味"]},
-  {name:"酸奶水果碗", time:5, categories:["蛋奶","水果","甜品"], ingredients:["酸奶","水果"], steps:["水果切块","加入酸奶","可撒坚果或麦片"]},
-  {name:"清冰箱杂蔬汤", time:25, categories:["蔬菜"], ingredients:["任意蔬菜","调味料"], steps:["蔬菜切块","加水煮软","按口味调味"]},
-  {name:"海鲜蔬菜乌冬", time:15, categories:["海鲜","蔬菜","主食"], ingredients:["海鲜","蔬菜","乌冬"], steps:["蔬菜下锅","加入海鲜与汤底","放乌冬煮熟"]},
-  {name:"奶香土豆炖肉", time:35, categories:["肉类","蔬菜","蛋奶"], ingredients:["肉类","土豆","牛奶"], steps:["肉类煎香","加入土豆炖软","少量牛奶收汁"]},
-  {name:"鸡蛋蔬菜三明治", time:12, categories:["蛋奶","蔬菜","主食"], ingredients:["鸡蛋","蔬菜","面包"], steps:["鸡蛋煎熟","蔬菜洗净","夹入面包"]},
-  {name:"豆腐蔬菜煲", time:20, categories:["豆制品","蔬菜"], ingredients:["豆腐","任意蔬菜","调味料"], steps:["豆腐切块煎至定型","加入蔬菜翻炒","加少量水和调味料焖煮"]},
-  {name:"水果气泡饮", time:5, categories:["水果","饮料"], ingredients:["水果","气泡水"], steps:["水果切片","加入冰块","倒入气泡水"]}
-];
+const recipes = Array.isArray(window.RECIPE_LIBRARY) ? window.RECIPE_LIBRARY : [];
+const FOOD_ALIASES = window.FOOD_ALIASES || {};
 
 let state = loadLocal();
 let currentView = "storage";
 let currentStorage = "fridge";
 let currentZone = "chiller";
 let currentCategory = "全部";
+let currentRecipeIngredient = "全部";
 let sortByExpiry = true;
 let selectedCategory = "其他";
 let selectedOpened = false;
@@ -217,60 +207,165 @@ function renderAlerts(){
   }).join("") || `<div class="empty-state"><h3>暂无日期提醒</h3><p>添加到期日后，这里会自动整理提醒。</p></div>`;
 }
 
-function recipeScore(r){
-  const categories = new Set(state.items.map(i => i.category));
-  const urgentCategories = new Set(
-    state.items
-      .filter(i => { const d = daysUntil(i.expiry); return d !== null && d <= 7; })
-      .map(i => i.category)
-  );
-  const base = r.categories.reduce((n,c)=>n+(categories.has(c)?1:0),0);
-  const urgentBoost = r.categories.reduce((n,c)=>n+(urgentCategories.has(c)?0.35:0),0);
-  return base + urgentBoost;
+function normalizeFoodName(name){
+  return String(name || "")
+    .toLowerCase()
+    .replace(/\s+/g,"")
+    .replace(/[0-9０-９]+(?:\.[0-9]+)?(?:g|kg|克|千克|斤|两|ml|l|毫升|升|个|只|颗|盒|包|袋|瓶|罐|块|份)?/gi,"")
+    .replace(/(?:一盒|一包|一袋|一瓶|一罐|一块|半盒|半包|冷冻|冷藏|新鲜|鲜|速冻|已开封|未开封)/g,"")
+    .replace(/[（）()【】\[\]、，,。.;；:：/\\_-]/g,"");
 }
 
-function recommendedRecipes(){
+function ingredientMatchesItem(ingredient, itemName){
+  const target = normalizeFoodName(itemName);
+  if(!target) return false;
+  const candidates = [ingredient, ...(FOOD_ALIASES[ingredient] || [])]
+    .map(normalizeFoodName)
+    .filter(Boolean);
+  return candidates.some(alias => {
+    if(alias.length === 1) return target === alias;
+    return target.includes(alias) || alias.includes(target);
+  });
+}
+
+function uniqueInventoryItems(){
+  const map = new Map();
+  state.items.filter(i => Number(i.qty ?? 1) > 0).forEach(i => {
+    const key = normalizeFoodName(i.name);
+    if(key && !map.has(key)) map.set(key, i);
+  });
+  return [...map.values()];
+}
+
+function recipeMatchesInventoryItem(recipe, item){
+  return recipe.ingredients.some(ingredient => ingredientMatchesItem(ingredient, item.name));
+}
+
+function getInventoryMatch(recipe){
+  const inventory = uniqueInventoryItems();
+  const matched = [], matchedItems = [], missing = [], urgentMatched = [];
+  recipe.ingredients.forEach(ingredient => {
+    const hit = inventory.find(item => ingredientMatchesItem(ingredient, item.name));
+    if(hit){
+      matched.push(ingredient);
+      if(!matchedItems.some(x => normalizeFoodName(x.name) === normalizeFoodName(hit.name))) matchedItems.push(hit);
+      const d = daysUntil(hit.expiry);
+      if(d !== null && d <= 7) urgentMatched.push(ingredient);
+    }else missing.push(ingredient);
+  });
+  const total = recipe.ingredients.length || 1;
+  const full = missing.length === 0;
+  const ratio = matched.length / total;
+  let score = full ? 1000 + matched.length * 100 : ratio * 400 + matched.length * 55 - missing.length * 35;
+  score += urgentMatched.length * 20;
+  return {matched, matchedItems, missing, full, ratio, score, urgentMatched};
+}
+
+function baseRecipeRanking(){
   const mode = $("#recipeMode")?.value || "best";
-  let list = recipes.map(r => ({...r, score: recipeScore(r)}));
-  if(mode === "quick") list = list.filter(r => r.time <= 25).sort((a,b)=>b.score-a.score || a.time-b.time);
-  else if(mode === "random") list.sort(()=>Math.random()-.5);
-  else list.sort((a,b)=>b.score-a.score || a.time-b.time);
+  let list = recipes.map(r => ({...r, match:getInventoryMatch(r)}));
+  if(currentRecipeIngredient !== "全部"){
+    const selectedItem = uniqueInventoryItems().find(i => normalizeFoodName(i.name) === currentRecipeIngredient);
+    if(selectedItem) list = list.filter(r => recipeMatchesInventoryItem(r, selectedItem));
+  }
+  if(!state.items.length){
+    list.sort((a,b) => a.time-b.time || a.name.localeCompare(b.name,"zh-CN"));
+    if(mode === "random") list.sort(()=>Math.random()-.5);
+    return list;
+  }
+  if(mode === "random"){
+    const useful = list.filter(r => r.match.full || (r.match.matched.length > 0 && r.match.missing.length <= 1));
+    return (useful.length ? useful : list).sort(()=>Math.random()-.5);
+  }
+  if(mode === "quick"){
+    list.sort((a,b) => Number(b.match.full)-Number(a.match.full) || b.match.score-a.match.score || a.time-b.time);
+    return list;
+  }
+  list.sort((a,b) => Number(b.match.full)-Number(a.match.full) || b.match.score-a.match.score || b.match.matched.length-a.match.matched.length || a.match.missing.length-b.match.missing.length || a.time-b.time);
   return list;
 }
 
+function diversifyRecipes(list, limit=18){
+  if(currentRecipeIngredient !== "全部") return list.slice(0,limit);
+  const inventory = uniqueInventoryItems();
+  if(inventory.length <= 1) return list.slice(0,limit);
+  const chosen = [], chosenNames = new Set();
+  for(let round=0; round<3 && chosen.length<limit; round++){
+    for(const item of inventory){
+      const candidate = list.find(r => !chosenNames.has(r.name) && r.match.matched.length > 0 && recipeMatchesInventoryItem(r, item));
+      if(candidate){
+        chosen.push(candidate); chosenNames.add(candidate.name);
+        if(chosen.length >= limit) break;
+      }
+    }
+  }
+  for(const r of list){
+    if(chosen.length >= limit) break;
+    if(!chosenNames.has(r.name) && r.match.matched.length > 0){chosen.push(r);chosenNames.add(r.name);}
+  }
+  return chosen;
+}
+
+function recommendedRecipes(){ return baseRecipeRanking(); }
+function recipeCountForItem(item){ return recipes.reduce((n,r)=>n+(recipeMatchesInventoryItem(r,item)?1:0),0); }
+
+function renderIngredientFilters(){
+  const inventory = uniqueInventoryItems();
+  const container = $("#ingredientFilterChips");
+  if(!container) return;
+  const rows = inventory.map(item => ({item,key:normalizeFoodName(item.name),count:recipeCountForItem(item)}));
+  const covered = rows.filter(x=>x.count>0).length;
+  $("#ingredientCoverageHint").textContent = inventory.length ? `已识别 ${covered}/${inventory.length} 种` : "";
+  container.innerHTML = [
+    `<button class="ingredient-filter-chip ${currentRecipeIngredient==="全部"?"active":""}" data-food-key="全部" type="button">综合推荐</button>`,
+    ...rows.map(({item,key,count}) => `<button class="ingredient-filter-chip ${currentRecipeIngredient===key?"active":""} ${count===0?"no-match":""}" data-food-key="${escapeHtml(key)}" type="button">${escapeHtml(item.name)}<span>${count}</span></button>`)
+  ].join("");
+  $$('[data-food-key]').forEach(btn => btn.onclick = () => {
+    currentRecipeIngredient = btn.dataset.foodKey;
+    $("#recipeCard").dataset.recipe = "";
+    renderRecipes();
+  });
+}
+
 function renderRecipes(){
-  const list = recommendedRecipes();
-  if(!$("#recipeCard").dataset.recipe) $("#recipeCard").dataset.recipe = list[0]?.name || recipes[0].name;
-  let selected = recipes.find(r=>r.name === $("#recipeCard").dataset.recipe) || list[0];
-  renderRecipeCard(selected);
-  $("#recipeList").innerHTML = list.slice(0,6).map(r => `
-    <button class="recipe-mini" data-recipe="${r.name}" type="button">
-      <strong>${r.name}</strong>
-      <small>${r.time} 分钟 · 匹配 ${r.categories.filter(c=>state.items.some(i=>i.category===c)).length}/${r.categories.length} 类库存</small>
-    </button>`).join("");
-  $$("[data-recipe]").forEach(b => b.onclick = () => {
-    const r = recipes.find(x=>x.name===b.dataset.recipe);
-    $("#recipeCard").dataset.recipe = r.name; renderRecipeCard(r);
+  renderIngredientFilters();
+  const ranked = recommendedRecipes();
+  const exact = ranked.filter(r => r.match.full);
+  const near = ranked.filter(r => !r.match.full && r.match.matched.length > 0 && r.match.missing.length <= 1);
+  let pool;
+  if(currentRecipeIngredient !== "全部"){
+    pool = [...exact, ...near, ...ranked.filter(r => r.match.matched.length > 0 && !exact.includes(r) && !near.includes(r))];
+  }else pool = exact.length ? [...exact, ...near] : near.length ? near : ranked;
+  const displayList = diversifyRecipes(pool,18);
+  if(!$("#recipeCard").dataset.recipe || !displayList.some(r=>r.name === $("#recipeCard").dataset.recipe)) $("#recipeCard").dataset.recipe = displayList[0]?.name || "";
+  const selected = displayList.find(r=>r.name === $("#recipeCard").dataset.recipe);
+  if(selected) renderRecipeCard(selected);
+  else if(currentRecipeIngredient !== "全部"){
+    const item = uniqueInventoryItems().find(i => normalizeFoodName(i.name) === currentRecipeIngredient);
+    $("#recipeCard").innerHTML = `<div class="recipe-muted">当前库存食材</div><div class="recipe-title">${escapeHtml(item?.name || "该食材")}</div><div class="recipe-simple-status">暂时没有匹配到合适的预置菜谱。这个食材仍然会保留在库存中，不影响其他推荐。</div>`;
+  }else $("#recipeCard").innerHTML = `<div class="recipe-title">先登记一些食材</div>`;
+  $("#recipeList").innerHTML = displayList.map(r => {
+    const m=r.match;
+    const line=m.full?`库存已匹配：${m.matched.join("、")}`:m.matched.length?`已有 ${m.matched.join("、")} · 还差 ${m.missing.join("、")}`:(r.group||"菜谱灵感");
+    return `<button class="recipe-mini ${m.full?"full-match":""}" data-recipe="${escapeHtml(r.name)}" type="button"><strong>${escapeHtml(r.name)}</strong><small>${escapeHtml(line)}</small></button>`;
+  }).join("");
+  $$('[data-recipe]').forEach(b => b.onclick = () => {
+    const r = ranked.find(x=>x.name===b.dataset.recipe) || recipes.find(x=>x.name===b.dataset.recipe);
+    if(!r) return;
+    const prepared = r.match ? r : {...r,match:getInventoryMatch(r)};
+    $("#recipeCard").dataset.recipe = prepared.name;
+    renderRecipeCard(prepared);
   });
 }
 
 function renderRecipeCard(r){
-  const categories = new Set(state.items.map(i => i.category));
-  const have = r.categories.filter(c=>categories.has(c));
-  const miss = r.categories.filter(c=>!categories.has(c));
-  $("#recipeCard").innerHTML = `
-    <div class="recipe-muted">当前推荐 · ${r.time} 分钟</div>
-    <div class="recipe-title">${r.name}</div>
-    <div class="recipe-tags">${r.categories.map(c=>`<span class="recipe-tag">${c}</span>`).join("")}</div>
-    <div class="recipe-columns">
-      <div><div class="recipe-muted">库存匹配</div><ul>
-        ${(have.length?have:["暂无匹配标签"]).map(x=>`<li>${x}</li>`).join("")}
-      </ul></div>
-      <div><div class="recipe-muted">可能还缺</div><ul>
-        ${(miss.length?miss:["基本齐全"]).map(x=>`<li>${x}</li>`).join("")}
-      </ul></div>
-    </div>
-    <div class="recipe-muted">建议食材：${r.ingredients.join("、")}</div>`;
+  const m = r.match || getInventoryMatch(r);
+  let status="";
+  if(!state.items.length) status="先登记一些食材，之后会按实际库存自动匹配。";
+  else if(m.full) status=`库存已匹配：${m.matched.join("、")}`;
+  else if(m.matched.length) status=`已有：${m.matched.join("、")}　还差：${m.missing.join("、")}`;
+  else status="随机灵感";
+  $("#recipeCard").innerHTML = `<div class="recipe-muted">${m.full?"现在就可以考虑做":"今日灵感"}</div><div class="recipe-title">${escapeHtml(r.name)}</div><div class="recipe-simple-status">${escapeHtml(status)}</div>`;
 }
 
 function updateControls(){
@@ -474,8 +569,14 @@ $("#copyTextBtn").onclick=async()=>{await navigator.clipboard.writeText($("#data
 $("#applyTextBtn").onclick=()=>{try{applyImported(JSON.parse($("#dataTextarea").value));}catch(e){toast("应用失败："+e.message);}};
 $("#bindFileBtn").onclick=bindFile;$("#readBoundBtn").onclick=readBound;$("#writeBoundBtn").onclick=writeBound;
 $("#randomRecipeBtn").onclick=()=>{
-  const list=recommendedRecipes();const pool=$("#recipeMode").value==="best"?list.slice(0,Math.max(1,Math.min(4,list.length))):list;
-  const r=pool[Math.floor(Math.random()*pool.length)]||recipes[0];$("#recipeCard").dataset.recipe=r.name;renderRecipeCard(r);
+  const ranked=recommendedRecipes();
+  const exact=ranked.filter(r=>r.match?.full);
+  const near=ranked.filter(r=>!r.match?.full && r.match?.matched?.length && r.match.missing.length<=1);
+  const pool=exact.length ? exact : near.length ? near : ranked.filter(r=>r.match?.matched?.length);
+  const r=pool[Math.floor(Math.random()*pool.length)]||ranked[0];
+  if(!r) return;
+  $("#recipeCard").dataset.recipe=r.name;
+  renderRecipeCard(r);
 };
 $("#recipeMode").onchange=()=>{$("#recipeCard").dataset.recipe="";renderRecipes();};
 
